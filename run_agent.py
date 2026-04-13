@@ -9849,6 +9849,20 @@ class AIAgent:
                 else:
                     # No tool calls - this is the final response
                     final_response = assistant_message.content or ""
+                    streamed_fallback = self._strip_think_blocks(
+                        getattr(self, "_current_streamed_assistant_text", "") or ""
+                    ).strip()
+                    if not self._has_content_after_think_block(final_response) and streamed_fallback:
+                        logger.info(
+                            "Using streamed assistant text as final response fallback (%d chars)",
+                            len(streamed_fallback),
+                        )
+                        final_response = streamed_fallback
+                        self._response_was_previewed = True
+                        try:
+                            assistant_message.content = streamed_fallback
+                        except Exception:
+                            pass
                     
                     # Check if response only has think block with no actual content after it
                     if not self._has_content_after_think_block(final_response):

@@ -482,11 +482,32 @@ class APIServerAdapter(BasePlatformAdapter):
         """Extract model/provider/base_url/api_mode from config.yaml."""
         model_cfg = config.get("model")
         if isinstance(model_cfg, dict):
+            provider = str(model_cfg.get("provider") or "").strip()
+            api_mode = str(model_cfg.get("api_mode") or "").strip()
+            base_url = str(model_cfg.get("base_url") or "").strip()
+            if not base_url:
+                custom_providers = config.get("custom_providers")
+                if isinstance(custom_providers, list):
+                    selected = None
+                    if provider and provider.lower() != "custom":
+                        for entry in custom_providers:
+                            if isinstance(entry, dict) and str(entry.get("name") or "").strip() == provider:
+                                selected = entry
+                                break
+                    if selected is None and custom_providers:
+                        for entry in custom_providers:
+                            if isinstance(entry, dict):
+                                selected = entry
+                                break
+                    if isinstance(selected, dict):
+                        base_url = str(selected.get("base_url") or "").strip()
+                        if not api_mode:
+                            api_mode = str(selected.get("api_mode") or "").strip()
             return {
                 "model": str(model_cfg.get("default") or model_cfg.get("model") or "").strip(),
-                "provider": str(model_cfg.get("provider") or "").strip(),
-                "api_mode": str(model_cfg.get("api_mode") or "").strip(),
-                "base_url": str(model_cfg.get("base_url") or "").strip(),
+                "provider": provider,
+                "api_mode": api_mode,
+                "base_url": base_url,
             }
         if isinstance(model_cfg, str):
             return {
@@ -496,6 +517,50 @@ class APIServerAdapter(BasePlatformAdapter):
                 "base_url": "",
             }
         return {"model": "", "provider": "", "api_mode": "", "base_url": ""}
+
+    async def _fetch_runtime_model_catalog(self) -> Optional[Dict[str, Any]]:
+        """Try to proxy the runtime backend's /models payload when configured."""
+        current = self._current_model_settings(load_config())
+        base_url = str(current.get("base_url") or "").strip().rstrip("/")
+        if not base_url:
+            return None
+        try:
+            import aiohttp as _aiohttp
+            timeout = _aiohttp.ClientTimeout(total=5)
+            async with _aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(f"{base_url}/models") as resp:
+                    if resp.status >= 400:
+                        return None
+                    payload = await resp.json()
+        except Exception:
+            logger.debug("Failed to fetch runtime model catalog from %s/models", base_url, exc_info=True)
+            return None
+        if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
+            return None
+        model_id = str(current.get("model") or "").strip()
+        data = []
+        seen = set()
+        for item in payload.get("data") or []:
+            if not isinstance(item, dict):
+                continue
+            normalized = dict(item)
+            item_id = str(normalized.get("id") or "").strip()
+            if not item_id:
+                continue
+            seen.add(item_id)
+            data.append(normalized)
+        if model_id and model_id not in seen:
+            data.insert(0, {
+                "id": model_id,
+                "object": "model",
+                "created": int(time.time()),
+                "owned_by": "runtime",
+                "root": model_id,
+                "parent": None,
+            })
+        payload["object"] = payload.get("object") or "list"
+        payload["data"] = data
+        return payload
 
     @staticmethod
     def _parse_int(value: Any, default: int, minimum: int = 0) -> int:
@@ -651,10 +716,14 @@ class APIServerAdapter(BasePlatformAdapter):
         return web.json_response({"status": "ok", "platform": "hermes-agent"})
 
     async def _handle_models(self, request: "web.Request") -> "web.Response":
-        """GET /v1/models — return hermes-agent as an available model."""
+        """GET /v1/models — return runtime backend models when available."""
         auth_err = self._check_auth(request)
         if auth_err:
             return auth_err
+
+        runtime_catalog = await self._fetch_runtime_model_catalog()
+        if runtime_catalog is not None:
+            return web.json_response(runtime_catalog)
 
         return web.json_response({
             "object": "list",
@@ -1331,6 +1400,27 @@ class APIServerAdapter(BasePlatformAdapter):
         config = load_config()
         current = self._current_model_settings(config)
         provider = (request.query.get("provider") or current["provider"] or "openrouter").strip()
+
+        runtime_catalog = await self._fetch_runtime_model_catalog()
+        if runtime_catalog is not None:
+            models = []
+            for item in runtime_catalog.get("data") or []:
+                if not isinstance(item, dict):
+                    continue
+                model_id = str(item.get("id") or "").strip()
+                if not model_id or model_id == self._model_name:
+                    continue
+                models.append({
+                    "id": model_id,
+                    "description": str(item.get("name") or item.get("status") or "runtime").strip() or "runtime",
+                    "provider": provider or "custom",
+                    "status": item.get("status"),
+                    "downloaded": item.get("downloaded"),
+                    "active": item.get("active"),
+                })
+            providers = list_available_providers()
+            return web.json_response({"provider": provider or "custom", "models": models, "providers": providers})
+
         models = [
             {"id": model_id, "description": description, "provider": provider}
             for model_id, description in curated_models_for_provider(provider)

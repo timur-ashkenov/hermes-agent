@@ -222,6 +222,7 @@ def _create_app(adapter: APIServerAdapter) -> web.Application:
     app.router.add_get("/health", adapter._handle_health)
     app.router.add_get("/v1/health", adapter._handle_health)
     app.router.add_get("/v1/models", adapter._handle_models)
+    app.router.add_get("/api/available-models", adapter._handle_available_models)
     app.router.add_post("/v1/chat/completions", adapter._handle_chat_completions)
     app.router.add_post("/v1/responses", adapter._handle_responses)
     app.router.add_get("/v1/responses/{response_id}", adapter._handle_get_response)
@@ -345,6 +346,55 @@ class TestModelsEndpoint:
                 headers={"Authorization": "Bearer sk-secret"},
             )
             assert resp.status == 200
+
+    @pytest.mark.asyncio
+    async def test_models_proxies_runtime_catalog(self, adapter):
+        app = _create_app(adapter)
+        runtime_catalog = {
+            "object": "list",
+            "data": [
+                {"id": "saiga-gem12-q6", "object": "model", "owned_by": "local"},
+                {"id": "t-lite-2.1-q5", "object": "model", "owned_by": "local"},
+            ],
+        }
+        with patch.object(adapter, "_fetch_runtime_model_catalog", new=AsyncMock(return_value=runtime_catalog)):
+            async with TestClient(TestServer(app)) as cli:
+                resp = await cli.get("/v1/models")
+                assert resp.status == 200
+                data = await resp.json()
+                assert [item["id"] for item in data["data"]] == ["saiga-gem12-q6", "t-lite-2.1-q5"]
+
+    @pytest.mark.asyncio
+    async def test_available_models_proxies_runtime_catalog(self, adapter):
+        app = _create_app(adapter)
+        runtime_catalog = {
+            "object": "list",
+            "data": [
+                {"id": "hermes-agent", "object": "model", "owned_by": "hermes"},
+                {"id": "saiga-gem12-q6", "status": "downloaded", "downloaded": True, "active": True},
+                {"id": "t-lite-2.1-q5", "status": "not_downloaded", "downloaded": False, "active": False},
+            ],
+        }
+        with patch.object(adapter, "_fetch_runtime_model_catalog", new=AsyncMock(return_value=runtime_catalog)):
+            async with TestClient(TestServer(app)) as cli:
+                resp = await cli.get("/api/available-models")
+                assert resp.status == 200
+                data = await resp.json()
+                assert [item["id"] for item in data["models"]] == ["saiga-gem12-q6", "t-lite-2.1-q5"]
+                assert data["models"][0]["downloaded"] is True
+
+    def test_current_model_settings_reads_custom_provider_base_url(self):
+        cfg = {
+            "model": {"default": "saiga-gem12-q6", "provider": "custom"},
+            "custom_providers": [
+                {"name": "local", "base_url": "http://host.docker.internal:47010/v1", "api_mode": "chat_completions"}
+            ],
+        }
+        current = APIServerAdapter._current_model_settings(cfg)
+        assert current["model"] == "saiga-gem12-q6"
+        assert current["provider"] == "custom"
+        assert current["base_url"] == "http://host.docker.internal:47010/v1"
+        assert current["api_mode"] == "chat_completions"
 
 
 # ---------------------------------------------------------------------------

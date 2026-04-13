@@ -1793,6 +1793,25 @@ class TestRunConversation:
             if roles[i] == "assistant" and roles[i + 1] == "assistant":
                 raise AssertionError("Consecutive assistant messages found in history")
 
+    def test_streamed_text_fallback_is_used_when_final_message_is_empty(self, agent):
+        self._setup_agent(agent)
+        empty_resp = _mock_response(content=None, finish_reason="stop")
+
+        def _fake_interruptible(*args, **kwargs):
+            agent._current_streamed_assistant_text = "Backend connection works."
+            return empty_resp
+
+        with (
+            patch.object(agent, "_interruptible_api_call", side_effect=_fake_interruptible),
+            patch.object(agent, "_persist_session"),
+            patch.object(agent, "_save_trajectory"),
+            patch.object(agent, "_cleanup_task_resources"),
+        ):
+            result = agent.run_conversation("answer me")
+        assert result["completed"] is True
+        assert result["final_response"] == "Backend connection works."
+        assert result["api_calls"] == 1
+
     def test_truly_empty_response_retries_3_times_then_empty(self, agent):
         """Truly empty response (no content, no reasoning) retries 3 times then falls through to (empty)."""
         self._setup_agent(agent)
