@@ -7747,13 +7747,6 @@ class AIAgent:
                 # Fired once when a brand-new session is created (not on
                 # continuation).  Plugins can use this to initialise
                 # session-scoped state (e.g. warm a memory cache).
-                logger.warning(
-                    "[debug chat_nonstream.normalized] assistant_content=%r assistant_reasoning=%r assistant_tool_calls=%r",
-                    getattr(assistant_message, "content", None),
-                    getattr(assistant_message, "reasoning", None),
-                    getattr(assistant_message, "tool_calls", None),
-                )
-
                 try:
                     from hermes_cli.plugins import invoke_hook as _invoke_hook
                     _invoke_hook(
@@ -9442,6 +9435,13 @@ class AIAgent:
                         assistant_message.content = "\n".join(parts)
                     else:
                         assistant_message.content = str(raw)
+
+                logger.warning(
+                    "[debug chat_nonstream.normalized] assistant_content=%r assistant_reasoning=%r assistant_tool_calls=%r",
+                    getattr(assistant_message, "content", None),
+                    getattr(assistant_message, "reasoning", None),
+                    getattr(assistant_message, "tool_calls", None),
+                )
 
                 try:
                     from hermes_cli.plugins import invoke_hook as _invoke_hook
