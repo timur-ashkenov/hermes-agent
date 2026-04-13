@@ -4985,6 +4985,19 @@ class AIAgent:
                 if hasattr(chunk, "model") and chunk.model:
                     model_name = chunk.model
 
+                if logger.isEnabledFor(logging.INFO):
+                    try:
+                        _debug_tool_calls = getattr(delta, "tool_calls", None)
+                        logger.info(
+                            "[debug chat_stream.chunk] content=%r reasoning=%r tool_calls=%s finish_reason=%r",
+                            getattr(delta, "content", None),
+                            getattr(delta, "reasoning_content", None) or getattr(delta, "reasoning", None),
+                            bool(_debug_tool_calls),
+                            getattr(chunk.choices[0], "finish_reason", None),
+                        )
+                    except Exception:
+                        logger.debug("debug chunk log failed", exc_info=True)
+
                 # Accumulate reasoning content
                 reasoning_text = getattr(delta, "reasoning_content", None) or getattr(delta, "reasoning", None)
                 if reasoning_text:
@@ -5077,6 +5090,14 @@ class AIAgent:
 
             # Build mock response matching non-streaming shape
             full_content = "".join(content_parts) or None
+            logger.info(
+                "[debug chat_stream.final] full_content=%r streamed_text=%r reasoning_chars=%d tool_calls=%d finish_reason=%r",
+                full_content,
+                getattr(self, "_current_streamed_assistant_text", "") or "",
+                len("".join(reasoning_parts)),
+                len(tool_calls_acc),
+                finish_reason,
+            )
             mock_tool_calls = None
             has_truncated_tool_args = False
             if tool_calls_acc:
