@@ -7747,6 +7747,13 @@ class AIAgent:
                 # Fired once when a brand-new session is created (not on
                 # continuation).  Plugins can use this to initialise
                 # session-scoped state (e.g. warm a memory cache).
+                logger.warning(
+                    "[debug chat_nonstream.normalized] assistant_content=%r assistant_reasoning=%r assistant_tool_calls=%r",
+                    getattr(assistant_message, "content", None),
+                    getattr(assistant_message, "reasoning", None),
+                    getattr(assistant_message, "tool_calls", None),
+                )
+
                 try:
                     from hermes_cli.plugins import invoke_hook as _invoke_hook
                     _invoke_hook(
@@ -9402,7 +9409,19 @@ class AIAgent:
                     )
                 else:
                     assistant_message = response.choices[0].message
-                
+
+                try:
+                    _raw_choice_msg = getattr(response.choices[0], "message", None) if getattr(response, "choices", None) else None
+                    logger.warning(
+                        "[debug chat_nonstream.raw] raw_message=%r raw_content=%r raw_reasoning=%r raw_tool_calls=%r",
+                        _raw_choice_msg,
+                        getattr(_raw_choice_msg, "content", None) if _raw_choice_msg is not None else None,
+                        getattr(_raw_choice_msg, "reasoning_content", None) if _raw_choice_msg is not None else None,
+                        getattr(_raw_choice_msg, "tool_calls", None) if _raw_choice_msg is not None else None,
+                    )
+                except Exception as _dbg_exc:
+                    logger.warning("[debug chat_nonstream.raw] failed: %s", _dbg_exc)
+
                 # Normalize content to string — some OpenAI-compatible servers
                 # (llama-server, etc.) return content as a dict or list instead
                 # of a plain string, which crashes downstream .strip() calls.
