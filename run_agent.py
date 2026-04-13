@@ -4988,7 +4988,7 @@ class AIAgent:
                 if logger.isEnabledFor(logging.INFO):
                     try:
                         _debug_tool_calls = getattr(delta, "tool_calls", None)
-                        logger.info(
+                        logger.warning(
                             "[debug chat_stream.chunk] content=%r reasoning=%r tool_calls=%s finish_reason=%r",
                             getattr(delta, "content", None),
                             getattr(delta, "reasoning_content", None) or getattr(delta, "reasoning", None),
@@ -5090,7 +5090,7 @@ class AIAgent:
 
             # Build mock response matching non-streaming shape
             full_content = "".join(content_parts) or None
-            logger.info(
+            logger.warning(
                 "[debug chat_stream.final] full_content=%r streamed_text=%r reasoning_chars=%d tool_calls=%d finish_reason=%r",
                 full_content,
                 getattr(self, "_current_streamed_assistant_text", "") or "",
@@ -9874,7 +9874,7 @@ class AIAgent:
                         getattr(self, "_current_streamed_assistant_text", "") or ""
                     ).strip()
                     if not self._has_content_after_think_block(final_response) and streamed_fallback:
-                        logger.info(
+                        logger.warning(
                             "Using streamed assistant text as final response fallback (%d chars)",
                             len(streamed_fallback),
                         )
