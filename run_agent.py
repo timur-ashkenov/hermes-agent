@@ -4988,12 +4988,15 @@ class AIAgent:
                 if logger.isEnabledFor(logging.INFO):
                     try:
                         _debug_tool_calls = getattr(delta, "tool_calls", None)
-                        logger.warning(
-                            "[debug chat_stream.chunk] content=%r reasoning=%r tool_calls=%s finish_reason=%r",
-                            getattr(delta, "content", None),
-                            getattr(delta, "reasoning_content", None) or getattr(delta, "reasoning", None),
-                            bool(_debug_tool_calls),
-                            getattr(chunk.choices[0], "finish_reason", None),
+                        print(
+                            "[debug chat_stream.chunk] content=%r reasoning=%r tool_calls=%s finish_reason=%r"
+                            % (
+                                getattr(delta, "content", None),
+                                getattr(delta, "reasoning_content", None) or getattr(delta, "reasoning", None),
+                                bool(_debug_tool_calls),
+                                getattr(chunk.choices[0], "finish_reason", None),
+                            ),
+                            flush=True,
                         )
                     except Exception:
                         logger.debug("debug chunk log failed", exc_info=True)
@@ -5090,13 +5093,16 @@ class AIAgent:
 
             # Build mock response matching non-streaming shape
             full_content = "".join(content_parts) or None
-            logger.warning(
-                "[debug chat_stream.final] full_content=%r streamed_text=%r reasoning_chars=%d tool_calls=%d finish_reason=%r",
-                full_content,
-                getattr(self, "_current_streamed_assistant_text", "") or "",
-                len("".join(reasoning_parts)),
-                len(tool_calls_acc),
-                finish_reason,
+            print(
+                "[debug chat_stream.final] full_content=%r streamed_text=%r reasoning_chars=%d tool_calls=%d finish_reason=%r"
+                % (
+                    full_content,
+                    getattr(self, "_current_streamed_assistant_text", "") or "",
+                    len("".join(reasoning_parts)),
+                    len(tool_calls_acc),
+                    finish_reason,
+                ),
+                flush=True,
             )
             mock_tool_calls = None
             has_truncated_tool_args = False
@@ -9405,15 +9411,18 @@ class AIAgent:
 
                 try:
                     _raw_choice_msg = getattr(response.choices[0], "message", None) if getattr(response, "choices", None) else None
-                    logger.warning(
-                        "[debug chat_nonstream.raw] raw_message=%r raw_content=%r raw_reasoning=%r raw_tool_calls=%r",
-                        _raw_choice_msg,
-                        getattr(_raw_choice_msg, "content", None) if _raw_choice_msg is not None else None,
-                        getattr(_raw_choice_msg, "reasoning_content", None) if _raw_choice_msg is not None else None,
-                        getattr(_raw_choice_msg, "tool_calls", None) if _raw_choice_msg is not None else None,
+                    print(
+                        "[debug chat_nonstream.raw] raw_message=%r raw_content=%r raw_reasoning=%r raw_tool_calls=%r"
+                        % (
+                            _raw_choice_msg,
+                            getattr(_raw_choice_msg, "content", None) if _raw_choice_msg is not None else None,
+                            getattr(_raw_choice_msg, "reasoning_content", None) if _raw_choice_msg is not None else None,
+                            getattr(_raw_choice_msg, "tool_calls", None) if _raw_choice_msg is not None else None,
+                        ),
+                        flush=True,
                     )
                 except Exception as _dbg_exc:
-                    logger.warning("[debug chat_nonstream.raw] failed: %s", _dbg_exc)
+                    print("[debug chat_nonstream.raw] failed: %s" % (_dbg_exc,), flush=True)
 
                 # Normalize content to string — some OpenAI-compatible servers
                 # (llama-server, etc.) return content as a dict or list instead
@@ -9436,11 +9445,14 @@ class AIAgent:
                     else:
                         assistant_message.content = str(raw)
 
-                logger.warning(
-                    "[debug chat_nonstream.normalized] assistant_content=%r assistant_reasoning=%r assistant_tool_calls=%r",
-                    getattr(assistant_message, "content", None),
-                    getattr(assistant_message, "reasoning", None),
-                    getattr(assistant_message, "tool_calls", None),
+                print(
+                    "[debug chat_nonstream.normalized] assistant_content=%r assistant_reasoning=%r assistant_tool_calls=%r"
+                    % (
+                        getattr(assistant_message, "content", None),
+                        getattr(assistant_message, "reasoning", None),
+                        getattr(assistant_message, "tool_calls", None),
+                    ),
+                    flush=True,
                 )
 
                 try:
@@ -9893,9 +9905,9 @@ class AIAgent:
                         getattr(self, "_current_streamed_assistant_text", "") or ""
                     ).strip()
                     if not self._has_content_after_think_block(final_response) and streamed_fallback:
-                        logger.warning(
-                            "Using streamed assistant text as final response fallback (%d chars)",
-                            len(streamed_fallback),
+                        print(
+                            "Using streamed assistant text as final response fallback (%d chars)" % (len(streamed_fallback),),
+                            flush=True,
                         )
                         final_response = streamed_fallback
                         self._response_was_previewed = True
