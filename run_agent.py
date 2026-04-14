@@ -4985,21 +4985,31 @@ class AIAgent:
                 if hasattr(chunk, "model") and chunk.model:
                     model_name = chunk.model
 
-                if logger.isEnabledFor(logging.INFO):
+                try:
+                    _debug_tool_calls = getattr(delta, "tool_calls", None)
+                    _debug_dump = None
                     try:
-                        _debug_tool_calls = getattr(delta, "tool_calls", None)
-                        print(
-                            "[debug chat_stream.chunk] content=%r reasoning=%r tool_calls=%s finish_reason=%r"
-                            % (
-                                getattr(delta, "content", None),
-                                getattr(delta, "reasoning_content", None) or getattr(delta, "reasoning", None),
-                                bool(_debug_tool_calls),
-                                getattr(chunk.choices[0], "finish_reason", None),
-                            ),
-                            flush=True,
-                        )
+                        if hasattr(delta, "model_dump"):
+                            _debug_dump = delta.model_dump()
+                        elif hasattr(delta, "dict"):
+                            _debug_dump = delta.dict()
+                        else:
+                            _debug_dump = getattr(delta, "__dict__", None)
                     except Exception:
-                        logger.debug("debug chunk log failed", exc_info=True)
+                        _debug_dump = None
+                    print(
+                        "[debug chat_stream.chunk] content=%r reasoning=%r tool_calls=%s finish_reason=%r dump=%r"
+                        % (
+                            getattr(delta, "content", None),
+                            getattr(delta, "reasoning_content", None) or getattr(delta, "reasoning", None),
+                            bool(_debug_tool_calls),
+                            getattr(chunk.choices[0], "finish_reason", None),
+                            _debug_dump,
+                        ),
+                        flush=True,
+                    )
+                except Exception as _dbg_chunk_exc:
+                    print("[debug chat_stream.chunk] failed: %r" % (_dbg_chunk_exc,), flush=True)
 
                 # Accumulate reasoning content
                 reasoning_text = getattr(delta, "reasoning_content", None) or getattr(delta, "reasoning", None)
